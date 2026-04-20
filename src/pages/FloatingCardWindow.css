@@ -676,3 +676,104 @@ body.floating-card-overlay-root,
     transform: rotate(360deg);
   }
 }
+
+.floating-card-view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(11, 16, 23, 0.72);
+}
+
+.floating-card-view-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #aeb8c4;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.floating-card-view-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fbff;
+}
+
+.floating-card-view-mode-btn.active {
+  background: rgba(255, 184, 76, 0.18);
+  color: #ffb84c;
+}
+
+.floating-card-quota-overview-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 3px;
+  padding: 5px 6px;
+  border-radius: 9px;
+  background: rgba(9, 14, 20, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-y: auto;
+}
+
+.floating-card-overview-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background-color 0.15s;
+}
+
+.floating-card-overview-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.floating-card-overview-row .floating-card-current-badge {
+  display: inline-flex;
+  margin-left: 4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 184, 76, 0.2);
+  color: #ffb84c;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.floating-card-overview-name {
+  min-width: 0;
+  flex: 0 0 auto;
+  max-width: 80px;
+  color: #c6d0da;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-card-overview-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.floating-card-overview-bar .floating-card-progress-track {
+  height: 5px;
+}
+
+.floating-card-overview-pct {
+  flex: 0 0 auto;
+  min-width: 30px;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 800;
+}

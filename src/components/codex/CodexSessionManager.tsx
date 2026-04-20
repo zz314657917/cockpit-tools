@@ -37,8 +37,8 @@ function buildGroups(sessions: CodexSessionRecord[]): SessionGroup[] {
     );
 }
 
-function buildDefaultExpandedGroups(_groups: SessionGroup[]): string[] {
-  return [];
+function buildDefaultExpandedGroups(groups: SessionGroup[]): string[] {
+  return groups.map((g) => g.cwd);
 }
 
 function formatRelativeTime(value: number | null | undefined, isZh: boolean): string {
@@ -201,6 +201,9 @@ export function CodexSessionManager() {
           return valid.length > 0 ? valid : buildDefaultExpandedGroups(nextGroups);
         });
         hasInitializedExpandedGroupsRef.current = true;
+        if (nextGroups.length > 0) {
+          void loadTokenStatsForGroups(nextGroups);
+        }
       } catch (error) {
         setMessage({ text: String(error), tone: 'error' });
       } finally {

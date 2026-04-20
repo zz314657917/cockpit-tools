@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAccountStore } from '../stores/useAccountStore';
 import { useCodexAccountStore } from '../stores/useCodexAccountStore';
@@ -13,6 +13,7 @@ import { useQoderAccountStore } from '../stores/useQoderAccountStore';
 import { useTraeAccountStore } from '../stores/useTraeAccountStore';
 import { useWorkbuddyAccountStore } from '../stores/useWorkbuddyAccountStore';
 import { useZedAccountStore } from '../stores/useZedAccountStore';
+import { useDashboardTokenStatsStore } from '../stores/useDashboardTokenStatsStore';
 import {
   parseGroupEntryId,
   PlatformLayoutEntryId,
@@ -22,7 +23,7 @@ import {
   usePlatformLayoutStore,
 } from '../stores/usePlatformLayoutStore';
 import { Page } from '../types/navigation';
-import { Users, CheckCircle2, Sparkles, RotateCw, Play, Github, Tag, ChevronDown } from 'lucide-react';
+import { Users, CheckCircle2, Sparkles, RotateCw, Play, Github, Tag, ChevronDown, Activity, TrendingUp, DollarSign } from 'lucide-react';
 import { TagEditModal } from '../components/TagEditModal';
 import { Account } from '../types/account';
 import {
@@ -179,6 +180,12 @@ export function DashboardPage({
   topCenterBanner,
 }: DashboardPageProps) {
   const { t } = useTranslation();
+
+  const { todayTokens, todayCostUsd, weeklyAvgTokens, isLoading: tokenStatsLoading, isRunning: codexLocalAccessRunning, fetchStats: fetchTokenStats } = useDashboardTokenStatsStore();
+
+  useEffect(() => {
+    fetchTokenStats();
+  }, [fetchTokenStats]);
   
   const [tagModalState, setTagModalState] = React.useState<{ accountId: string; platform: PlatformId | 'codebuddy_cn'; tags: string[] } | null>(null);
   const [dashboardCardCollapse, setDashboardCardCollapse] = React.useState<DashboardCardCollapseState>({
@@ -2703,6 +2710,32 @@ export function DashboardPage({
             <span className="stat-value">{stats.total}</span>
           </div>
         </div>
+
+        {codexLocalAccessRunning && !tokenStatsLoading && (
+          <>
+            <div className="stat-card">
+              <div className="stat-icon-bg token-info"><Activity size={24} /></div>
+              <div className="stat-info">
+                <span className="stat-label">{t('dashboard.todayTokens', '今日消耗')}</span>
+                <span className="stat-value">{todayTokens >= 1_000_000 ? `${(todayTokens / 1_000_000).toFixed(2)}M` : todayTokens >= 1000 ? `${(todayTokens / 1000).toFixed(1)}K` : todayTokens}</span>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon-bg token-info"><TrendingUp size={24} /></div>
+              <div className="stat-info">
+                <span className="stat-label">{t('dashboard.weeklyAvgTokens', '7日日均')}</span>
+                <span className="stat-value">{weeklyAvgTokens >= 1_000_000 ? `${(weeklyAvgTokens / 1_000_000).toFixed(2)}M` : weeklyAvgTokens >= 1000 ? `${(weeklyAvgTokens / 1000).toFixed(1)}K` : weeklyAvgTokens}</span>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon-bg token-info"><DollarSign size={24} /></div>
+              <div className="stat-info">
+                <span className="stat-label">{t('dashboard.todayCost', '预估费用')}</span>
+                <span className="stat-value">${Math.round(todayCostUsd)}</span>
+              </div>
+            </div>
+          </>
+        )}
 
         {visibleEntryOrder.map((entryId) => {
           const platformId = resolveEntryDefaultPlatformId(entryId, platformGroups);

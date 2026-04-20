@@ -1,5 +1,5 @@
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, Pin, PinOff, RefreshCw, Star, Undo2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, LayoutGrid, Pin, PinOff, RefreshCw, Star, Undo2, User, X } from 'lucide-react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -22,6 +22,7 @@ import {
   UnifiedAccountPresentation,
 } from '../presentation/platformAccountPresentation';
 import { DisplayGroup, getDisplayGroups } from '../services/groupService';
+import { getCodexLocalAccessState } from '../services/codexLocalAccessService';
 import {
   getFloatingCardContext,
   hideCurrentFloatingCardWindow,
@@ -260,6 +261,8 @@ export function FloatingCardWindow() {
   const [refreshingAccountId, setRefreshingAccountId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [platformLoading, setPlatformLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'single' | 'overview'>('overview');
+  const [codexLocalAccessAccountIds, setCodexLocalAccessAccountIds] = useState<Set<string>>(new Set());
 
   const platformOrder = useMemo(() => {
     const seen = new Set<PlatformId>();
@@ -422,6 +425,20 @@ export function FloatingCardWindow() {
     } finally {
       setPlatformLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    void getCodexLocalAccessState().then((state) => {
+      if (disposed) return;
+      setCodexLocalAccessAccountIds(new Set(state.collection?.accountIds ?? []));
+    }).catch(() => {
+      if (disposed) return;
+      setCodexLocalAccessAccountIds(new Set());
+    });
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -683,70 +700,84 @@ export function FloatingCardWindow() {
   );
 
   const selectedState = useMemo(() => {
+    const getRemainingPercent = (account: object): number => {
+      if (selectedPlatform === 'codex') {
+        return (account as { quota?: { hourly_percentage?: number } }).quota?.hourly_percentage ?? 100;
+      }
+      const quota = (account as { quota?: { models?: { percentage?: number }[] } }).quota;
+      return quota?.models?.[0]?.percentage ?? 100;
+    };
+    const sortByRemainingPercent = <T extends object>(arr: T[]): T[] =>
+      [...arr].sort((a, b) => getRemainingPercent(b) - getRemainingPercent(a));
+
     switch (selectedPlatform) {
       case 'antigravity':
         return {
-          accounts: agAccounts,
+          accounts: sortByRemainingPercent(agAccounts),
           actualCurrentAccount: agCurrent,
         };
-      case 'codex':
+      case 'codex': {
+        const localAccessFiltered = codexAccounts.filter((a) => codexLocalAccessAccountIds.has(a.id));
+        const sorted = sortByRemainingPercent(localAccessFiltered);
+        const filteredCurrent = sorted.find((a) => a.id === codexCurrent?.id) ?? null;
         return {
-          accounts: codexAccounts,
-          actualCurrentAccount: codexCurrent,
+          accounts: sorted,
+          actualCurrentAccount: filteredCurrent,
         };
+      }
       case 'github-copilot':
         return {
-          accounts: githubCopilotAccounts,
+          accounts: sortByRemainingPercent(githubCopilotAccounts),
           actualCurrentAccount: githubCopilotCurrent,
         };
       case 'windsurf':
         return {
-          accounts: windsurfAccounts,
+          accounts: sortByRemainingPercent(windsurfAccounts),
           actualCurrentAccount: windsurfCurrent,
         };
       case 'kiro':
         return {
-          accounts: kiroAccounts,
+          accounts: sortByRemainingPercent(kiroAccounts),
           actualCurrentAccount: kiroCurrent,
         };
       case 'cursor':
         return {
-          accounts: cursorAccounts,
+          accounts: sortByRemainingPercent(cursorAccounts),
           actualCurrentAccount: cursorCurrent,
         };
       case 'gemini':
         return {
-          accounts: geminiAccounts,
+          accounts: sortByRemainingPercent(geminiAccounts),
           actualCurrentAccount: geminiCurrent,
         };
       case 'codebuddy':
         return {
-          accounts: codebuddyAccounts,
+          accounts: sortByRemainingPercent(codebuddyAccounts),
           actualCurrentAccount: codebuddyCurrent,
         };
       case 'codebuddy_cn':
         return {
-          accounts: codebuddyCnAccounts,
+          accounts: sortByRemainingPercent(codebuddyCnAccounts),
           actualCurrentAccount: codebuddyCnCurrent,
         };
       case 'qoder':
         return {
-          accounts: qoderAccounts,
+          accounts: sortByRemainingPercent(qoderAccounts),
           actualCurrentAccount: qoderCurrent,
         };
       case 'trae':
         return {
-          accounts: traeAccounts,
+          accounts: sortByRemainingPercent(traeAccounts),
           actualCurrentAccount: traeCurrent,
         };
       case 'workbuddy':
         return {
-          accounts: workbuddyAccounts,
+          accounts: sortByRemainingPercent(workbuddyAccounts),
           actualCurrentAccount: workbuddyCurrent,
         };
       case 'zed':
         return {
-          accounts: zedAccounts,
+          accounts: sortByRemainingPercent(zedAccounts),
           actualCurrentAccount: zedCurrent,
         };
     }
@@ -759,6 +790,7 @@ export function FloatingCardWindow() {
     codebuddyCurrent,
     codexAccounts,
     codexCurrent,
+    codexLocalAccessAccountIds,
     cursorAccounts,
     cursorCurrent,
     geminiAccounts,
@@ -926,6 +958,34 @@ export function FloatingCardWindow() {
 
   const isCurrentViewed = Boolean(viewedAccount?.id && viewedAccount.id === currentAccount?.id);
   const visibleQuotaItems = presentation?.quotaItems.slice(0, 2) ?? [];
+  const overviewQuotas = useMemo(() => {
+    return accounts.map((account) => {
+      const displayName =
+        (account as unknown as { name?: string }).name ||
+        (account as unknown as { email?: string }).email ||
+        account.id;
+
+      let remainingPercent = 100;
+      if (selectedPlatform === 'codex') {
+        const codexAccount = account as unknown as { quota?: { hourly_percentage?: number } };
+        remainingPercent = codexAccount.quota?.hourly_percentage ?? 100;
+      } else {
+        const quota = (account as unknown as { quota?: { models?: { percentage?: number }[] } }).quota;
+        const modelQuota = quota?.models?.[0];
+        remainingPercent = modelQuota?.percentage ?? 100;
+      }
+      const usedPercent = 100 - remainingPercent;
+
+      return {
+        accountId: account.id,
+        displayName,
+        usedPercent,
+        remainingPercent,
+        isCurrent: account.id === currentAccount?.id,
+        isViewed: account.id === viewedAccount?.id,
+      };
+    });
+  }, [accounts, currentAccount?.id, selectedPlatform, viewedAccount?.id]);
   const accountStateLabel = viewedAccount
     ? isCurrentViewed
       ? t('floatingCard.currentAccount', '当前账号')
@@ -1256,6 +1316,7 @@ export function FloatingCardWindow() {
     refreshingAccountId,
     selectedPlatform,
     switchingAccountId,
+    viewMode,
     viewedAccount?.id,
   ]);
 
@@ -1350,93 +1411,157 @@ export function FloatingCardWindow() {
             {accountStateLabel ? (
               <div className="floating-card-state-strip">
                 <span className="floating-card-state-pill">{accountStateLabel}</span>
+                <div className="floating-card-view-mode-toggle">
+                  <button
+                    className={`floating-card-view-mode-btn ${viewMode === 'overview' ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => setViewMode('overview')}
+                    title={t('floatingCard.viewMode.overview', '账号余量概览')}
+                    aria-label={t('floatingCard.viewMode.overview', '账号余量概览')}
+                  >
+                    <LayoutGrid size={13} />
+                  </button>
+                  <button
+                    className={`floating-card-view-mode-btn ${viewMode === 'single' ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => setViewMode('single')}
+                    title={t('floatingCard.viewMode.single', '单账号详情')}
+                    aria-label={t('floatingCard.viewMode.single', '单账号详情')}
+                  >
+                    <User size={13} />
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
 
-          {viewedAccount && presentation ? (
-            <div className="floating-card-account">
-              <div className="floating-card-account-head">
-                <div className="floating-card-account-title">
-                  <div className="floating-card-account-name">
-                    {maskAccountText(presentation.displayName)}
+          {viewMode === 'overview' ? (
+            overviewQuotas.length > 0 ? (
+              <div className="floating-card-quota-overview-panel">
+                {overviewQuotas.map((item) => {
+                  const progressPercent = Math.max(0, Math.min(100, item.usedPercent));
+                  const quotaClass =
+                    item.remainingPercent >= 60 ? 'high' :
+                    item.remainingPercent >= 30 ? 'medium' :
+                    item.remainingPercent >= 10 ? 'low' : 'critical';
+                  return (
+                    <div key={item.accountId} className="floating-card-overview-row">
+                      <div className="floating-card-overview-name">
+                        {maskAccountText(item.displayName)}
+                        {item.isCurrent && <span className="floating-card-current-badge">{t('floatingCard.current', '当前')}</span>}
+                      </div>
+                      <div className="floating-card-overview-bar">
+                        <div className="floating-card-progress-track">
+                          <div
+                            className={`floating-card-progress-bar floating-card-progress-bar--${quotaClass}`}
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className={`floating-card-overview-pct floating-card-quota-value--${quotaClass}`}>
+                        {selectedPlatform === 'codex' ? '5H: ' : ''}{item.remainingPercent.toFixed(0)}%
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="floating-card-empty-state">
+                <div className="floating-card-section-label">
+                  {platformLoading ? t('common.loading', '加载中...') : t('floatingCard.empty.title', '暂无账号')}
+                </div>
+                <div className="floating-card-empty-text">
+                  {platformLoading
+                    ? t('floatingCard.empty.loading', '正在读取当前平台账号信息')
+                    : t('floatingCard.empty.desc', '当前平台还没有可展示的账号')}
+                </div>
+              </div>
+            )
+          ) : (
+            viewedAccount && presentation ? (
+              <div className="floating-card-account">
+                <div className="floating-card-account-head">
+                  <div className="floating-card-account-title">
+                    <div className="floating-card-account-name">
+                      {maskAccountText(presentation.displayName)}
+                    </div>
+                    {presentation.cycleText ? (
+                      <div className="floating-card-account-subline">
+                        <span className="floating-card-section-label">
+                          {t('floatingCard.cycle', '周期')}
+                        </span>
+                        <span className="floating-card-inline-value">{presentation.cycleText}</span>
+                      </div>
+                    ) : null}
                   </div>
-                  {presentation.cycleText ? (
-                    <div className="floating-card-account-subline">
+                  <span className={`floating-card-plan floating-card-plan--${presentation.planClass || 'unknown'}`}>
+                    {presentation.planLabel || '--'}
+                  </span>
+                </div>
+
+                <div className="floating-card-inline-meta">
+                  {presentation.sublineText ? (
+                    <div className="floating-card-meta-pill">
                       <span className="floating-card-section-label">
-                        {t('floatingCard.cycle', '周期')}
+                        {t('floatingCard.status', '状态')}
                       </span>
-                      <span className="floating-card-inline-value">{presentation.cycleText}</span>
+                      <span
+                        className={`floating-card-inline-value floating-card-inline-value--${presentation.sublineClass || 'neutral'}`}
+                      >
+                        {presentation.sublineText}
+                      </span>
                     </div>
                   ) : null}
                 </div>
-                <span className={`floating-card-plan floating-card-plan--${presentation.planClass || 'unknown'}`}>
-                  {presentation.planLabel || '--'}
-                </span>
-              </div>
 
-              <div className="floating-card-inline-meta">
-                {presentation.sublineText ? (
-                  <div className="floating-card-meta-pill">
-                    <span className="floating-card-section-label">
-                      {t('floatingCard.status', '状态')}
-                    </span>
-                    <span
-                      className={`floating-card-inline-value floating-card-inline-value--${presentation.sublineClass || 'neutral'}`}
-                    >
-                      {presentation.sublineText}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="floating-card-quota-panel">
-                {visibleQuotaItems.length > 0 ? (
-                  visibleQuotaItems.map((item) => {
-                    const progressPercent = Math.max(
-                      0,
-                      Math.min(100, item.progressPercent ?? item.percentage ?? 0),
-                    );
-                    return (
-                      <div key={item.key} className="floating-card-quota-row">
-                        <div className="floating-card-quota-top">
-                          <span className="floating-card-quota-label">{item.label}</span>
-                          <span className={`floating-card-quota-value floating-card-quota-value--${item.quotaClass || 'high'}`}>
-                            {item.valueText || '--'}
-                          </span>
-                        </div>
-                        {item.showProgress !== false ? (
-                          <div className="floating-card-progress-track">
-                            <div
-                              className={`floating-card-progress-bar floating-card-progress-bar--${item.quotaClass || 'high'}`}
-                              style={{ width: `${progressPercent}%` }}
-                            />
+                <div className="floating-card-quota-panel">
+                  {visibleQuotaItems.length > 0 ? (
+                    visibleQuotaItems.map((item) => {
+                      const progressPercent = Math.max(
+                        0,
+                        Math.min(100, item.progressPercent ?? item.percentage ?? 0),
+                      );
+                      return (
+                        <div key={item.key} className="floating-card-quota-row">
+                          <div className="floating-card-quota-top">
+                            <span className="floating-card-quota-label">{item.label}</span>
+                            <span className={`floating-card-quota-value floating-card-quota-value--${item.quotaClass || 'high'}`}>
+                              {item.valueText || '--'}
+                            </span>
                           </div>
-                        ) : null}
-                        {item.resetText ? (
-                          <div className="floating-card-quota-reset">{item.resetText}</div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="floating-card-empty-text">
-                    {t('common.shared.quota.noData', '暂无配额数据')}
-                  </div>
-                )}
+                          {item.showProgress !== false ? (
+                            <div className="floating-card-progress-track">
+                              <div
+                                className={`floating-card-progress-bar floating-card-progress-bar--${item.quotaClass || 'high'}`}
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+                          ) : null}
+                          {item.resetText ? (
+                            <div className="floating-card-quota-reset">{item.resetText}</div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="floating-card-empty-text">
+                      {t('common.shared.quota.noData', '暂无配额数据')}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="floating-card-empty-state">
-              <div className="floating-card-section-label">
-                {platformLoading ? t('common.loading', '加载中...') : t('floatingCard.empty.title', '暂无账号')}
+            ) : (
+              <div className="floating-card-empty-state">
+                <div className="floating-card-section-label">
+                  {platformLoading ? t('common.loading', '加载中...') : t('floatingCard.empty.title', '暂无账号')}
+                </div>
+                <div className="floating-card-empty-text">
+                  {platformLoading
+                    ? t('floatingCard.empty.loading', '正在读取当前平台账号信息')
+                    : t('floatingCard.empty.desc', '当前平台还没有可展示的账号')}
+                </div>
               </div>
-              <div className="floating-card-empty-text">
-                {platformLoading
-                  ? t('floatingCard.empty.loading', '正在读取当前平台账号信息')
-                  : t('floatingCard.empty.desc', '当前平台还没有可展示的账号')}
-              </div>
-            </div>
+            )
           )}
 
           {errorText ? <div className="floating-card-error">{errorText}</div> : null}

@@ -91,6 +91,7 @@
 .stat-icon-bg.info { background: rgba(14, 165, 198, 0.1); color: #0ea5c6; }
 .stat-icon-bg.github { background: var(--bg-tertiary); color: var(--text-primary); }
 .stat-icon-bg.windsurf { background: rgba(14, 165, 198, 0.12); color: #0ea5c6; }
+.stat-icon-bg.token-info { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
 .dashboard-group-icon {
   border-radius: 8px;
   object-fit: cover;
