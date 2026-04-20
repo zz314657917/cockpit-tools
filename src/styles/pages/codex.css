@@ -5487,6 +5487,20 @@
   flex-shrink: 0;
 }
 
+.codex-session-folder__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.codex-session-folder__tokens {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 .codex-session-folder__children {
   margin-left: 44px;
 }

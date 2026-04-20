@@ -94,6 +94,30 @@ function formatTokenStats(stats?: CodexSessionTokenStats): string {
   return '';
 }
 
+function formatGroupTokenStats(
+  sessionIds: string[],
+  tokenStatsBySessionId: SessionTokenStatsMap,
+): string {
+  let totalInput = 0;
+  let totalOutput = 0;
+  let hasAnyData = false;
+
+  for (const id of sessionIds) {
+    const stats = tokenStatsBySessionId[id];
+    if (stats) {
+      hasAnyData = true;
+      totalInput += stats.inputTokens;
+      totalOutput += stats.outputTokens;
+    }
+  }
+
+  if (!hasAnyData) {
+    return '';
+  }
+
+  return `${formatLargeNumber(totalInput)} / ${formatLargeNumber(totalOutput)} tokens`;
+}
+
 export function CodexSessionManager() {
   const { t, i18n } = useTranslation();
   const instances = useCodexInstanceStore((state) => state.instances);
@@ -564,6 +588,7 @@ export function CodexSessionManager() {
             const allSelected = groupSessionIds.every((id) => selectedIdSet.has(id));
             const isExpanded = expandedGroups.includes(group.cwd);
             const isTokenStatsLoading = loadingTokenGroupSet.has(group.cwd);
+            const groupTokenText = formatGroupTokenStats(groupSessionIds, tokenStatsBySessionId);
             return (
               <section className="codex-session-folder" key={group.cwd}>
                 <div className="codex-session-folder__row">
@@ -596,9 +621,20 @@ export function CodexSessionManager() {
                       {resolveGroupLabel(group.cwd)}
                     </button>
                   </div>
-                  <span className="codex-session-folder__time">
-                    {formatRelativeTime(group.latestUpdatedAt, isZh)}
-                  </span>
+                  <div className="codex-session-folder__right">
+                    {groupTokenText ? (
+                      <span className="codex-session-folder__tokens" title={t('codex.sessionManager.labels.tokenUsage', 'Token使用')}>
+                        {groupTokenText}
+                      </span>
+                    ) : isTokenStatsLoading ? (
+                      <span className="codex-session-folder__tokens" title={t('common.loading', '加载中...')}>
+                        <RefreshCw size={12} className="icon-spin" />
+                      </span>
+                    ) : null}
+                    <span className="codex-session-folder__time">
+                      {formatRelativeTime(group.latestUpdatedAt, isZh)}
+                    </span>
+                  </div>
                 </div>
                 {isExpanded ? (
                   <div className="codex-session-folder__children">
